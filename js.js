@@ -1,4 +1,5 @@
 const STORAGE_KEY = 'open-when-letters-v1';
+const DRAFT_KEY = 'open-when-letter-draft-v1';
 const isRecipientPage = document.body.dataset.page === 'recipient';
 
 function generateLetterId() {
@@ -39,6 +40,7 @@ const letterInput = document.getElementById('letterInput');
 const fromInput = document.getElementById('fromInput');
 const occasionInput = document.getElementById('occasionInput');
 const lettersGrid = document.getElementById('lettersGrid');
+const storageStatus = document.getElementById('storageStatus');
 
 function resizeMessageBox() {
   if (!letterInput) return;
@@ -92,6 +94,33 @@ function getSharedLetter() {
 
 function saveLetters(letters) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(normalizeLetters(letters)));
+}
+
+function saveDraft() {
+  if (!letterForm) return;
+
+  localStorage.setItem(DRAFT_KEY, JSON.stringify({
+    recipient: recipientInput.value,
+    message: letterInput.value,
+    sender: fromInput.value,
+    occasion: occasionInput.value
+  }));
+}
+
+function restoreDraft() {
+  if (!letterForm) return;
+
+  try {
+    const draft = JSON.parse(localStorage.getItem(DRAFT_KEY));
+    if (!draft) return;
+
+    recipientInput.value = draft.recipient || 'My Love';
+    letterInput.value = draft.message || '';
+    fromInput.value = draft.sender || '';
+    occasionInput.value = draft.occasion || '';
+  } catch (error) {
+    console.warn('Could not restore draft:', error);
+  }
 }
 
 function escapeHtml(value) {
@@ -211,7 +240,10 @@ function renderLetters() {
 }
 
 if (letterForm) {
-  letterInput.addEventListener('input', resizeMessageBox);
+  letterForm.addEventListener('input', () => {
+    resizeMessageBox();
+    saveDraft();
+  });
 
   letterForm.addEventListener('submit', (event) => {
     event.preventDefault();
@@ -232,6 +264,8 @@ if (letterForm) {
     const currentLetters = getStoredLetters();
     currentLetters.unshift(newLetter);
     saveLetters(currentLetters);
+    localStorage.removeItem(DRAFT_KEY);
+    if (storageStatus) storageStatus.textContent = 'Saved just now on this device';
     renderLetters();
 
     letterForm.reset();
@@ -244,4 +278,5 @@ if (letterForm) {
 }
 
 renderLetters();
+restoreDraft();
 resizeMessageBox();

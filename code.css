@@ -262,6 +262,31 @@ body {
   font-weight: 700;
 }
 
+.saved-heading {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 18px;
+  margin: 8px 0 18px;
+}
+
+.saved-heading .eyebrow {
+  margin-bottom: 6px;
+  text-align: left;
+}
+
+.saved-heading h2 {
+  margin: 0;
+  color: var(--rose-dark);
+  font-size: clamp(1.7rem, 3vw, 2.5rem);
+}
+
+.storage-status {
+  margin: 0 0 4px;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
 
 .letters-grid {
   display: grid;
