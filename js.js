@@ -77,6 +77,19 @@ function getStoredLetters() {
   return letters;
 }
 
+function getSharedLetter() {
+  const encodedLetter = new URLSearchParams(window.location.search).get('letter');
+
+  if (!encodedLetter) return null;
+
+  try {
+    return normalizeLetters([JSON.parse(encodedLetter)])[0];
+  } catch (error) {
+    console.warn('Could not read shared letter:', error);
+    return null;
+  }
+}
+
 function saveLetters(letters) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(normalizeLetters(letters)));
 }
@@ -133,8 +146,9 @@ function bindLetterCard(card) {
   if (copyLinkButton && !isRecipientPage) {
     copyLinkButton.addEventListener('click', async (event) => {
       event.stopPropagation();
-      const letterId = copyLinkButton.dataset.letterId;
-      const shareUrl = `${window.location.origin}${window.location.pathname}?letter=${letterId}`;
+      const sharedLetter = letters.find((item) => item.id === copyLinkButton.dataset.letterId);
+      const sharePath = window.location.pathname.replace(/[^/]*$/, 'recipient.html');
+      const shareUrl = `${window.location.origin}${sharePath}?letter=${encodeURIComponent(JSON.stringify(sharedLetter))}`;
 
       try {
         await navigator.clipboard.writeText(shareUrl);
@@ -188,7 +202,8 @@ function buildLetterCard(letter) {
 }
 
 function renderLetters() {
-  const letters = getStoredLetters();
+  const sharedLetter = isRecipientPage ? getSharedLetter() : null;
+  const letters = sharedLetter ? [sharedLetter] : getStoredLetters();
   lettersGrid.innerHTML = '';
   letters.forEach((letter) => {
     lettersGrid.appendChild(buildLetterCard(letter));
