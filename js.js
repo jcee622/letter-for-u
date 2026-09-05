@@ -108,6 +108,63 @@ function getShareUrl(letter) {
   return `${window.location.origin}${sharePath}?letter=${encodeURIComponent(JSON.stringify(letter))}`;
 }
 
+async function compressText(text) {
+  if (!('CompressionStream' in window)) return text;
+
+  const stream = new Blob([text]).stream().pipeThrough(new CompressionStream('deflate-raw'));
+  const bytes = new Uint8Array(await new Response(stream).arrayBuffer());
+  let binary = '';
+  bytes.forEach((byte) => {
+    binary += String.fromCharCode(byte);
+  });
+  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+async function decompressText(encodedText) {
+  if (!('DecompressionStream' in window)) return encodedText;
+
+  const binary = atob(encodedText.replace(/-/g, '+').replace(/_/g, '/'));
+  const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0));
+  const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream('deflate-raw'));
+  return new Response(stream).text();
+}
+
+async function getLettersShareUrl(letters) {
+  const sharePath = window.location.pathname.replace(/[^/]*$/, 'recipient.html');
+  const compactLetters = letters.map((letter) => [
+    letter.recipient,
+    letter.sender,
+    letter.occasion,
+    letter.message
+  ]);
+  const encodedLetters = await compressText(JSON.stringify(compactLetters));
+  return `${window.location.origin}${sharePath}?letters=${encodeURIComponent(encodedLetters)}`;
+}
+
+async function getSharedLetters() {
+  const encodedLetters = new URLSearchParams(window.location.search).get('letters');
+
+  if (!encodedLetters) return null;
+
+  try {
+    const decodedLetters = encodedLetters.trim().startsWith('[')
+      ? encodedLetters
+      : await decompressText(encodedLetters);
+    const parsed = JSON.parse(decodedLetters);
+    if (!Array.isArray(parsed)) return null;
+
+    return normalizeLetters(parsed.map((letter) => ({
+      recipient: letter[0],
+      sender: letter[1],
+      occasion: letter[2],
+      message: letter[3]
+    })));
+  } catch (error) {
+    console.warn('Could not read shared letters:', error);
+    return null;
+  }
+}
+
 function saveDraft() {
   if (!letterForm) return;
 
@@ -240,9 +297,10 @@ function buildLetterCard(letter) {
   return card;
 }
 
-function renderLetters() {
+async function renderLetters() {
   const sharedLetter = isRecipientPage ? getSharedLetter() : null;
-  const letters = sharedLetter ? [sharedLetter] : getStoredLetters();
+  const sharedLetters = isRecipientPage ? await getSharedLetters() : null;
+  const letters = sharedLetters || (sharedLetter ? [sharedLetter] : getStoredLetters());
   lettersGrid.innerHTML = '';
 
   letters.forEach((letter) => {
@@ -276,7 +334,11 @@ if (letterForm) {
     currentLetters.unshift(newLetter);
     saveLetters(currentLetters);
     localStorage.removeItem(DRAFT_KEY);
-    if (recipientPageLink) recipientPageLink.href = getShareUrl(newLetter);
+    if (recipientPageLink) {
+      getLettersShareUrl(currentLetters).then((shareUrl) => {
+        recipientPageLink.href = shareUrl;
+      });
+    }
     if (storageStatus) storageStatus.textContent = 'Saved here. Use Copy Link to open this letter on another device.';
     renderLetters();
 
@@ -294,6 +356,10 @@ restoreDraft();
 resizeMessageBox();
 
 if (recipientPageLink) {
-  const latestLetter = getStoredLetters()[0];
-  if (latestLetter) recipientPageLink.href = getShareUrl(latestLetter);
+  const savedLetters = getStoredLetters();
+  if (savedLetters.length) {
+    getLettersShareUrl(savedLetters).then((shareUrl) => {
+      recipientPageLink.href = shareUrl;
+    });
+  }
 }
