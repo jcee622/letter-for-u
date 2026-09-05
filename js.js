@@ -41,6 +41,7 @@ const fromInput = document.getElementById('fromInput');
 const occasionInput = document.getElementById('occasionInput');
 const lettersGrid = document.getElementById('lettersGrid');
 const storageStatus = document.getElementById('storageStatus');
+const recipientPageLink = document.getElementById('recipientPageLink');
 
 function resizeMessageBox() {
   if (!letterInput) return;
@@ -94,6 +95,11 @@ function getSharedLetter() {
 
 function saveLetters(letters) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(normalizeLetters(letters)));
+}
+
+function getShareUrl(letter) {
+  const sharePath = window.location.pathname.replace(/[^/]*$/, 'recipient.html');
+  return `${window.location.origin}${sharePath}?letter=${encodeURIComponent(JSON.stringify(letter))}`;
 }
 
 function saveDraft() {
@@ -175,9 +181,7 @@ function bindLetterCard(card, letter) {
   if (copyLinkButton && !isRecipientPage) {
     copyLinkButton.addEventListener('click', async (event) => {
       event.stopPropagation();
-      const sharedLetter = letter;
-      const sharePath = window.location.pathname.replace(/[^/]*$/, 'recipient.html');
-      const shareUrl = `${window.location.origin}${sharePath}?letter=${encodeURIComponent(JSON.stringify(sharedLetter))}`;
+      const shareUrl = getShareUrl(letter);
 
       try {
         await navigator.clipboard.writeText(shareUrl);
@@ -232,8 +236,14 @@ function buildLetterCard(letter) {
 
 function renderLetters() {
   const sharedLetter = isRecipientPage ? getSharedLetter() : null;
-  const letters = sharedLetter ? [sharedLetter] : getStoredLetters();
+  const letters = isRecipientPage ? (sharedLetter ? [sharedLetter] : []) : getStoredLetters();
   lettersGrid.innerHTML = '';
+
+  if (!letters.length && isRecipientPage) {
+    lettersGrid.innerHTML = '<p class="storage-status">This page needs the shared letter link from the sender.</p>';
+    return;
+  }
+
   letters.forEach((letter) => {
     lettersGrid.appendChild(buildLetterCard(letter));
   });
@@ -265,7 +275,8 @@ if (letterForm) {
     currentLetters.unshift(newLetter);
     saveLetters(currentLetters);
     localStorage.removeItem(DRAFT_KEY);
-    if (storageStatus) storageStatus.textContent = 'Saved just now on this device';
+    if (recipientPageLink) recipientPageLink.href = getShareUrl(newLetter);
+    if (storageStatus) storageStatus.textContent = 'Saved here. Use Copy Link to open this letter on another device.';
     renderLetters();
 
     letterForm.reset();
@@ -280,3 +291,8 @@ if (letterForm) {
 renderLetters();
 restoreDraft();
 resizeMessageBox();
+
+if (recipientPageLink) {
+  const latestLetter = getStoredLetters()[0];
+  if (latestLetter) recipientPageLink.href = getShareUrl(latestLetter);
+}
