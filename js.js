@@ -111,7 +111,7 @@ function getShareUrl(letter) {
 async function compressText(text) {
   if (!('CompressionStream' in window)) return text;
 
-  const stream = new Blob([text]).stream().pipeThrough(new CompressionStream('deflate-raw'));
+  const stream = new Blob([text]).stream().pipeThrough(new CompressionStream('deflate'));
   const bytes = new Uint8Array(await new Response(stream).arrayBuffer());
   let binary = '';
   bytes.forEach((byte) => {
@@ -125,7 +125,7 @@ async function decompressText(encodedText) {
 
   const binary = atob(encodedText.replace(/-/g, '+').replace(/_/g, '/'));
   const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0));
-  const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream('deflate-raw'));
+  const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream('deflate'));
   return new Response(stream).text();
 }
 
@@ -137,7 +137,12 @@ async function getLettersShareUrl(letters) {
     letter.occasion,
     letter.message
   ]);
-  const encodedLetters = await compressText(JSON.stringify(compactLetters));
+  let encodedLetters;
+  try {
+    encodedLetters = await compressText(JSON.stringify(compactLetters));
+  } catch (error) {
+    encodedLetters = JSON.stringify(compactLetters);
+  }
   return `${window.location.origin}${sharePath}?letters=${encodeURIComponent(encodedLetters)}`;
 }
 
@@ -153,12 +158,18 @@ async function getSharedLetters() {
     const parsed = JSON.parse(decodedLetters);
     if (!Array.isArray(parsed)) return null;
 
-    return normalizeLetters(parsed.map((letter) => ({
-      recipient: letter[0],
-      sender: letter[1],
-      occasion: letter[2],
-      message: letter[3]
-    })));
+    return normalizeLetters(parsed.map((letter) => {
+      if (Array.isArray(letter)) {
+        return {
+          recipient: letter[0],
+          sender: letter[1],
+          occasion: letter[2],
+          message: letter[3]
+        };
+      }
+
+      return letter;
+    }));
   } catch (error) {
     console.warn('Could not read shared letters:', error);
     return null;
@@ -300,7 +311,9 @@ function buildLetterCard(letter) {
 async function renderLetters() {
   const sharedLetter = isRecipientPage ? getSharedLetter() : null;
   const sharedLetters = isRecipientPage ? await getSharedLetters() : null;
-  const letters = sharedLetters || (sharedLetter ? [sharedLetter] : getStoredLetters());
+  const letters = sharedLetters?.length
+    ? sharedLetters
+    : (sharedLetter ? [sharedLetter] : getStoredLetters());
   lettersGrid.innerHTML = '';
 
   letters.forEach((letter) => {
