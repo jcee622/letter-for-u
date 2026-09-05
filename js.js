@@ -68,7 +68,13 @@ function getStoredLetters() {
     try {
       const parsed = JSON.parse(saved);
       if (Array.isArray(parsed) && parsed.length) {
-        return normalizeLetters(parsed);
+        const storedLetters = normalizeLetters(parsed);
+        const missingDefaults = defaultLetters.filter((defaultLetter) => (
+          !storedLetters.some((letter) => letter.recipient === defaultLetter.recipient)
+        ));
+        const letters = [...storedLetters, ...normalizeLetters(missingDefaults)];
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(letters));
+        return letters;
       }
     } catch (error) {
       console.warn('Could not read saved letters:', error);
@@ -236,13 +242,8 @@ function buildLetterCard(letter) {
 
 function renderLetters() {
   const sharedLetter = isRecipientPage ? getSharedLetter() : null;
-  const letters = isRecipientPage ? (sharedLetter ? [sharedLetter] : []) : getStoredLetters();
+  const letters = sharedLetter ? [sharedLetter] : getStoredLetters();
   lettersGrid.innerHTML = '';
-
-  if (!letters.length && isRecipientPage) {
-    lettersGrid.innerHTML = '<p class="storage-status">This page needs the shared letter link from the sender.</p>';
-    return;
-  }
 
   letters.forEach((letter) => {
     lettersGrid.appendChild(buildLetterCard(letter));
